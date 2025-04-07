@@ -1,2 +1,2 @@
 # rh_telegram_export
-Sending race data to a live telegram channel
+Sending data during the race to the telegram channel
