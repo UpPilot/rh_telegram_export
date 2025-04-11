@@ -1,0 +1,13 @@
+{
+    "name": "Telegram Export",
+    "author": "UpPilot",
+    "author_uri": "https://github.com/UpPilot/",
+    "description": "Sending data during the race to the telegram channel",
+    "info_uri": "https://github.com/UpPilot/rh_telegram_export",
+    "license": "MIT",
+    "version": "1.0.0-beta",
+    "required_rhapi_version": "1.0",
+    "category": ["Other"],
+    "domain":"rh_telegram_export",
+    "dependencies" : ["requests"]
+}
