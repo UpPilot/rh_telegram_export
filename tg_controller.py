@@ -1,6 +1,6 @@
 import requests
 import json
-from RHUI import UIField, UIFieldType, UIFieldSelectOption
+from RHUI import UIField, UIFieldType
 
 class Handler:
     def __init__(self,rhapi):
