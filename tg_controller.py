@@ -37,10 +37,6 @@ class Handler:
                                      field_type = UIFieldType.CHECKBOX, desc = "Send notifications about the start and finish of the race")
         fields.register_option(start_finish_send, TELEGRAM_EXPORT_PLUGIN)
         
-        select_options = [UIFieldSelectOption(value = "by_race_time",label = "Race time"),UIFieldSelectOption(value = "by_fastest_lap",label = "Fastest lap")]
-        result_sort_type = UIField( name = 'telegram-select-result-sort', label = 'Sort results by:',\
-                                    field_type = UIFieldType.SELECT, desc ="Select how to sort results in your message",value = select_options[0], options = select_options)
-        fields.register_option(result_sort_type, TELEGRAM_EXPORT_PLUGIN)
         
         # Кнопочки
         ui.register_quickbutton(TELEGRAM_EXPORT_PLUGIN, "telegram-btn-heat", "Send current heat", self.race_heat)   
@@ -117,7 +113,7 @@ class Handler:
     
     def race_results(self,args=None):
         last_race = self.rhapi.db.races[-1]
-        result_sort = self.rhapi.db.option("telegram-select-result-sort")
+        result_sort = self.results_type
         print(result_sort)
         race_data = self.rhapi.db.race_results(last_race)[result_sort] #Парсим данные по result-type (Лучший круг, лучшее время и тп)
 
