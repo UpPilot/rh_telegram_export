@@ -1,6 +1,6 @@
 import json
 from eventmanager import Evt
-from .tg_controller import Handler
+from .custom_plugins.tg_controller import Handler
 
 
 
