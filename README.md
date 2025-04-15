@@ -1,5 +1,3 @@
-
-[English readme](README.en.md)
 ## RH Telegram Export Plugin
 Плагин для экспорта данных в телеграмм во время гонки.
 ### Функции

@@ -1,6 +1,4 @@
 
-
-
 ## RH Telegram export plugin
 This plugin allows you to send the results of the races and laps to Telegram right during the race.
 ## Features 
