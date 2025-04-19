@@ -1,6 +1,7 @@
 import requests
 import json
-from RHUI import UIField, UIFieldType
+from RHUI import UIField, UIFieldType, UIFieldSelectOption
+from collections import defaultdict
 
 class Handler:
     def __init__(self,rhapi):
@@ -21,6 +22,10 @@ class Handler:
         channel_id = UIField(name = "telegram-filed-channel-id", label = "Telegram channel @uesrname or id", field_type = UIFieldType.TEXT, desc = "Username @ or channel ID to which the bot (must be an admin) will send data")  
         fields.register_option(channel_id, TELEGRAM_EXPORT_PLUGIN)
         
+        results_text = UIField(name = "telegram-filed-results-text", label = "Results message text:", field_type = UIFieldType.TEXT, desc = "Select what text to send using {lp_best} , {lp_avg} , {lps_num} , {lps_consecutives} , {lps_total_time}"\
+                               ,value = "{lp_best} | laps: {lps_num} | {lps_total_time}",placeholder = "{lp_best} | laps: {lps_num} | {lps_total_time}")  
+        fields.register_option(results_text, TELEGRAM_EXPORT_PLUGIN)
+
         laps_send = UIField(name = 'telegram-check-lap-send', label = 'Auto send lap time', field_type = UIFieldType.CHECKBOX, desc = "Automatically send data about the time of the passage of the lap")
         fields.register_option(laps_send, TELEGRAM_EXPORT_PLUGIN)
 
@@ -35,8 +40,19 @@ class Handler:
 
         start_finish_send = UIField( name = 'telegram-check-start-finish-send', label = 'Send the race start and finish',\
                                      field_type = UIFieldType.CHECKBOX, desc = "Send notifications about the start and finish of the race")
-        fields.register_option(start_finish_send, TELEGRAM_EXPORT_PLUGIN)
+        fields.register_option(start_finish_send,TELEGRAM_EXPORT_PLUGIN)
+
+
+        value_by_fastest = UIFieldSelectOption(value = "by_fastest_lap", label = "Fastest lap")
+        value_by_race_time = UIFieldSelectOption(value = "by_race_time", label = "Race time")
+        value_by_consecutives = UIFieldSelectOption(value = "by_consecutives", label = "Consecutives")
+
+        results_type = UIField( name = 'telegram-select-results-type', label = 'Select a method to sort the results',\
+                                     field_type = UIFieldType.SELECT, desc = "When sending results, pilots will be displayed according to the selected type",options = [value_by_fastest,value_by_consecutives,value_by_race_time],value = "by_fastest_lap")
         
+        fields.register_option(results_type,TELEGRAM_EXPORT_PLUGIN)
+        
+
         
         # Кнопочки
         ui.register_quickbutton(TELEGRAM_EXPORT_PLUGIN, "telegram-btn-heat", "Send current heat", self.race_heat)   
@@ -44,7 +60,6 @@ class Handler:
         ui.register_quickbutton(TELEGRAM_EXPORT_PLUGIN, "telegram-btn-results", "Send results", self.race_results)
         ui.register_quickbutton(TELEGRAM_EXPORT_PLUGIN, "telegram-btn-pilots", "Send all pilots", self.all_pilots)
         ui.register_quickbutton(TELEGRAM_EXPORT_PLUGIN, "telegram-btn-event-results", "Send event results", self.event_results)
-
        
 
     #Отправляем 
@@ -110,29 +125,46 @@ class Handler:
         if self.rhapi.db.option("telegram-check-results-send") == "1":
             self.race_results()
         return
-    
-    def race_results(self,args=None):
-        last_race = self.rhapi.db.races[-1]
-        result_sort = self.results_type
-        print(result_sort)
-        race_data = self.rhapi.db.race_results(last_race)[result_sort] #Парсим данные по result-type (Лучший круг, лучшее время и тп)
 
+    def race_results(self,args=None):
+        races = self.rhapi.db.races
+        if len(races) == 0:
+            return
+        last_race = self.rhapi.db.races[-1]
+        
+        result_sort = self.rhapi.db.option("telegram-select-results-type")#self.results_type
+        race_data = self.rhapi.db.race_results(last_race)[result_sort] #Парсим данные по result-type (Лучший круг, лучшее время и тп)
+        
         round_number = last_race.round_id
-        heat_name = self.rhapi.db.heat_by_id(last_race.heat_id).name
+        heat_data = self.rhapi.db.heat_by_id(last_race.heat_id)
+        heat_name = heat_data.name
+        if heat_name == "" or heat_name == None:
+            heat_name = heat_data.id
+        
         
         text = f"<b>{heat_name}</b> | Round: {round_number}\n"
         cnt = 1
-        for i in race_data:
-            pilot_id = i["pilot_id"]
+    
+        for race in race_data:
+            
+            pilot_id = race["pilot_id"]
             pilot_name = self.rhapi.db.pilot_by_id(pilot_id).name
-            laps = i["laps"]
-            best_lap = i["fastest_lap"]
-            total_time = i["total_time"]
-            text += f"{cnt}. <b>{pilot_name}</b>\n<b>{best_lap}</b> | laps <b>{laps}</b> | <b>{total_time}</b>\n"
+            
+            data = {"lp_best":race["fastest_lap"],
+                    "lp_avg":race["average_lap"],
+                    "lps_num": race["laps"],
+                    "lps_consecutives":race["consecutives"],
+                    "lps_total_time" : race["total_time_laps"]
+                    }
+            
+            text += f"{cnt}. <b>{pilot_name}</b>\n"
+            text += self.rhapi.db.option("telegram-filed-results-text").format_map(defaultdict(str,data)) + "\n"
+            
             cnt += 1
         self.send(text=text)
-        return
-    
+        return   
+
+
     def db_backup_fix(self,args):
         #Юзеру ОБЯЗАТЕЛЬНО надо удалять свой токен из бд 
         if self.rhapi.db.option("telegram-filed-token") != "":
@@ -211,18 +243,21 @@ class Handler:
 
 
     def event_results(self,args=None):
-        results = self.rhapi.eventresults.results["event_leaderboard"][self.results_type]        
+        results = self.rhapi.eventresults.results["event_leaderboard"][self.rhapi.db.option("telegram-select-results-type")]        
         race_data = results
         text = f""
         cnt = 1
-        for i in race_data:
-            pilot_id = i["pilot_id"]
+        for race in race_data:
+
+            data = {"lp_best":race["fastest_lap"],
+                    "lp_avg":race["average_lap"],
+                    "lps_num":race["laps"],
+                    "lps_consecutives":race["consecutives"],
+                    "lps_total_time" : race["total_time_laps"]
+                    }
+            pilot_id = race["pilot_id"]
             pilot_name = self.rhapi.db.pilot_by_id(pilot_id).name
-            laps = i["laps"]
-            best_lap = i["fastest_lap"]
-            total_time = i["total_time"]
-            text += f"{cnt}. <b>{pilot_name}</b>\n<b>{best_lap}</b> | laps <b>{laps}</b> | <b>{total_time}</b>\n\n"
-            cnt += 1
+            text += f"{cnt}. <b>{pilot_name}</b>\n"
+            text += self.rhapi.db.option("telegram-filed-results-text").format_map(defaultdict(str,data)) + "\n\n"
         self.send(text=text)
         return
-
