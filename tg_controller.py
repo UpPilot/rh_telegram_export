@@ -7,6 +7,27 @@ class Handler:
     def __init__(self,rhapi):
         self.rhapi = rhapi
         self.results_type = "by_fastest_lap"  
+        self.message_templates = {
+            "results":{
+                "msg_start": "<b>{heat_name}</b> | Round: {round_number}\n",
+                "msg_end":""
+            },
+            
+            "race_start":{
+                "msg_start":"<i>{heat_name}</i> | Round:{round_number}\n<b>Race started</b>!🟢",
+                "msg_end":""
+            },
+
+            "race_end":{
+                "msg_start":"<i>{heat_name}</i>\n<b>Race finished!</b>🔴",
+                "msg_end":""
+            },
+            "lap_recorded":{
+                "msg_start":"{pilot_name} | 🏁 Lap {lap_number} | ⏱️ {lap_time_formatted}",
+                "msg_end":""
+            }
+
+        }
 
     def init_ui(self, args):
         
@@ -34,8 +55,8 @@ class Handler:
         fields.register_option(results_send, TELEGRAM_EXPORT_PLUGIN)
 
 
-        hide_empty_pilots = UIField( name = 'telegram-check-hide-empty-pilots',label = "Hide pilots without band and channel",\
-                                     field_type=UIFieldType.CHECKBOX,desc="Hide the pilot in list if it does not have a band and channel defined.")
+        hide_empty_pilots = UIField( name = 'telegram-check-hide-empty-pilots',label = "Send pilots with assigned channels",\
+                                     field_type=UIFieldType.CHECKBOX,desc="send a list of only those pilots who have a band and channel assigned")
         fields.register_option(hide_empty_pilots,TELEGRAM_EXPORT_PLUGIN)
 
         start_finish_send = UIField( name = 'telegram-check-start-finish-send', label = 'Send the race start and finish',\
@@ -55,7 +76,7 @@ class Handler:
 
         
         # Кнопочки
-        ui.register_quickbutton(TELEGRAM_EXPORT_PLUGIN, "telegram-btn-heat", "Send current heat", self.race_heat)   
+        #ui.register_quickbutton(TELEGRAM_EXPORT_PLUGIN, "telegram-btn-heat", "Send current heat", self.race_heat)   
         ui.register_quickbutton(TELEGRAM_EXPORT_PLUGIN, "telegram-btn-all-heats", "Send all heats", self.all_heats)              
         ui.register_quickbutton(TELEGRAM_EXPORT_PLUGIN, "telegram-btn-results", "Send results", self.race_results)
         ui.register_quickbutton(TELEGRAM_EXPORT_PLUGIN, "telegram-btn-pilots", "Send all pilots", self.all_pilots)
@@ -99,14 +120,25 @@ class Handler:
         
         if self.rhapi.db.option("telegram-check-start-finish-send") == "1":
             heat = self.rhapi.db.heat_by_id(self.rhapi.race.heat)
-            self.send(text=f"<i>{heat.name}</i> | Round:{self.rhapi.race.round}\n<b>Race started</b>!🟢")
+            data = {
+                "heat_name":heat.name,
+                "round_number":self.rhapi.race.round
+            }
+            msg_tmp = self.message_templates["race_start"]
+            text = msg_tmp["msg_start"].format_map(defaultdict(str,data)) + msg_tmp["msg_end"]
+            self.send(text=text)
         return
     
     def race_end(self,args=None):
         
         if self.rhapi.db.option('telegram-check-start-finish-send') == "1":
             heat_name = self.rhapi.db.heat_by_id(self.rhapi.race.heat).name
-            self.send(text=f"<i>{heat_name}</i>\n<b>Race finished!</b>🔴")
+            data = {
+                "heat_name": heat_name
+            }
+            msg_tmp = self.message_templates["race_end"]
+            text = msg_tmp["msg_start"].format_map(defaultdict(str,data)) + msg_tmp["msg_end"]
+            self.send(text=text)
         return
     
     def lap_recorded(self,args=None): #Пройденный круг 
@@ -116,7 +148,14 @@ class Handler:
             pilot_name = self.rhapi.db.pilot_by_id(pilot_id).name
             lap_number = lap_data["lap"].lap_number
             lap_time_formatted = lap_data["lap"].lap_time_formatted
-            self.send(text=f"{pilot_name} | 🏁 Lap {lap_number} | ⏱️ {lap_time_formatted}")
+            data = {
+                "pilot_name":pilot_name,
+                "lap_number":lap_number,
+                "lap_time_formatted":lap_time_formatted
+            }
+            msg_tmp = self.message_templates["lap_recorded"]
+            text = msg_tmp["msg_start"].format_map(defaultdict(str,data)) + msg_tmp["msg_end"]
+            self.send(text=text)
 
         return
 
@@ -141,8 +180,12 @@ class Handler:
         if heat_name == "" or heat_name == None:
             heat_name = heat_data.id
         
-        
-        text = f"<b>{heat_name}</b> | Round: {round_number}\n"
+        data = {
+            "heat_name":heat_name,
+            "round_number":round_number
+        }
+        msg_tmp = self.message_templates["results"]
+        text = msg_tmp["msg_start"].format_map(defaultdict(str,data))
         cnt = 1
     
         for race in race_data:
@@ -161,6 +204,7 @@ class Handler:
             text += self.rhapi.db.option("telegram-filed-results-text").format_map(defaultdict(str,data)) + "\n"
             
             cnt += 1
+        text += msg_tmp["msg_end"]
         self.send(text=text)
         return   
 
@@ -173,73 +217,71 @@ class Handler:
         self.rhapi.db.option_set(name="telegram-filed-token", value = "")
 
 
-    def race_heat(self,args=None): #Отправляем текущий список пилотов с каналами и название группы
-        heat_id = self.rhapi.race.heat
-        heat = self.rhapi.db.heat_by_id(heat_id)
-        if heat == None:
-            return
-        pilots_list = self.rhapi.race.pilots
-        
-        text = f"<i>Heat name:</i>\n<b>{heat.name}</b>\n<i>Pilots:</i>\n"
-        cnt = 1
-        for i in pilots_list:
-            pilot_id = pilots_list[i]
-            if pilot_id != 0:
-                pilot = self.rhapi.db.pilot_by_id(pilot_id)
-                pilot_name = pilot.name
-                pilot_frequencies = pilot.used_frequencies
-                band_channel = str(json.loads(pilot_frequencies)[-1]["b"]) + str(json.loads(pilot_frequencies)[-1]["c"])
-                text += f"{cnt}. <b>{pilot_name}</b> | <b>{band_channel}</b>\n"
-                cnt += 1
-        
-        self.send(text=text)
-        return
-    
     def all_pilots(self,args=None):
 
         text = "<i>All pilots:</i>\n"
         pilots_list = self.rhapi.db.pilots
         hide_empty = self.rhapi.db.option("telegram-check-hide-empty-pilots") == "1"
         cnt = 1
-        for pilot in pilots_list:
-            pilot_frequencies = pilot.used_frequencies
-            if  pilot_frequencies != None and pilot_frequencies != "":
-                band_channel = str(json.loads(pilot_frequencies)[-1]["b"]) + str(json.loads(pilot_frequencies)[-1]["c"])
-            else:
-                band_channel = "-"
+        if hide_empty:
 
-            if band_channel == "-":
-                if  hide_empty:
-                    text += ""
-                else:
-                    text += f"{cnt}. {pilot.callsign} | <b>{band_channel}</b>\n" 
-                    cnt += 1
-            else:
-                text += f"{cnt}. {pilot.callsign} | <b>{band_channel}</b>\n"
-                cnt += 1
+            heats_data = self.get_pilot_freqs()
+            pilots_list = {} #pilot : [r1,r2]
 
+            for heat in heats_data:
+                for pilot in heats_data[heat]:
+                    if pilot.name not in pilots_list:
+                        pilots_list[pilot.name] = set()
+                    pilots_list[pilot.name].add(heats_data[heat][pilot])
+
+            for pilot in pilots_list:
+                bc_text = f"<b>{pilot}</b>  "
+                for bc in pilots_list[pilot]:
+                    bc_text += f"<i>{bc}</i> "
+                text += bc_text+"\n"
+
+        else:
+            for pilot in pilots_list:
+                text += pilot.name + "\n"
         self.send(text)
         return
     
+    def get_pilot_freqs(self): # Возвращаем словарь {"heat_name1" :{"pilot_name":"R2"},"heat_name2" :{"pilot_name2":"R3"}}
+        pilot_bc = {}
+        heats_list = self.rhapi.db.heats  
+        freqs = json.loads(self.rhapi.db.frequencysets[0].frequencies)
+
+        for heat in heats_list: #Проходимся по всемхитам 
+            pilot_bc[heat] = {}
+            
+            slots = self.rhapi.db.slots_by_heat(heat.id) #Получаем все слоты 
+            for slot in range(len(slots)): 
+                pilot = self.rhapi.db.pilot_by_id(slots[slot].pilot_id)
+                  # Name or callsign
+                if pilot == None:
+                    continue
+                pilot_bc[heat][pilot]  = str(freqs["b"][slot])+str(freqs["c"][slot])
+ 
+        return  pilot_bc
+    
+    def get_heat_name(self,heat):
+        heat_name = heat.name
+        if heat_name == None or heat_name == "None":
+            heat_name = ""
+            race_class = self.rhapi.db.raceclass_by_id(heat.class_id)
+            heat_name += f"{race_class.name}"
+        return heat_name
+
+
     def all_heats(self,args=None):
         #Проходимся по всем хитам и в каждом хите по всем слотам (в каждом слоте берем пилота)
-
-        heats_list = self.rhapi.db.heats    
-        for heat in heats_list:
-            text = f"<b>{heat.name}</b>\n<i>Pilots:</i>\n"
+        heats_data = self.get_pilot_freqs()
+        for heat in heats_data:
+            text = f"<i>{self.get_heat_name(heat)}</i>\n"
+            for pilot in heats_data[heat]:
+                text += f"{pilot.name} {heats_data[heat][pilot]}\n"
+            self.send(text)
             
-            slot_list = self.rhapi.db.slots_by_heat(heat.id)
-
-            for _slot in slot_list:
-                pilot_id = _slot.pilot_id
-                if pilot_id != 0:                
-                    pilot = self.rhapi.db.pilot_by_id(pilot_id)
-                    pilot_frequencies = pilot.used_frequencies
-                    band_channel = str(json.loads(pilot_frequencies)[-1]["b"]) + str(json.loads(pilot_frequencies)[-1]["c"])
-                    text += f"<b>{pilot.name}</b> | {band_channel}\n"
-
-            self.send(text=text)
-        return
 
 
     def event_results(self,args=None):
