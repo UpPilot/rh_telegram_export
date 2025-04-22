@@ -119,9 +119,9 @@ class Handler:
     def race_start(self,args=None):
         
         if self.rhapi.db.option("telegram-check-start-finish-send") == "1":
-            heat = self.rhapi.db.heat_by_id(self.rhapi.race.heat)
+            heat_name = self.get_heat_name(self.rhapi.db.heat_by_id(self.rhapi.race.heat))
             data = {
-                "heat_name":heat.name,
+                "heat_name":heat_name,
                 "round_number":self.rhapi.race.round
             }
             msg_tmp = self.message_templates["race_start"]
@@ -132,7 +132,7 @@ class Handler:
     def race_end(self,args=None):
         
         if self.rhapi.db.option('telegram-check-start-finish-send') == "1":
-            heat_name = self.rhapi.db.heat_by_id(self.rhapi.race.heat).name
+            heat_name = self.get_heat_name(self.rhapi.db.heat_by_id(self.rhapi.race.heat))
             data = {
                 "heat_name": heat_name
             }
@@ -176,9 +176,8 @@ class Handler:
         
         round_number = last_race.round_id
         heat_data = self.rhapi.db.heat_by_id(last_race.heat_id)
-        heat_name = heat_data.name
-        if heat_name == "" or heat_name == None:
-            heat_name = heat_data.id
+        heat_name = self.get_heat_name(heat_data)
+        
         
         data = {
             "heat_name":heat_name,
@@ -266,10 +265,8 @@ class Handler:
     
     def get_heat_name(self,heat):
         heat_name = heat.name
-        if heat_name == None or heat_name == "None":
-            heat_name = ""
-            race_class = self.rhapi.db.raceclass_by_id(heat.class_id)
-            heat_name += f"{race_class.name}"
+        if heat_name == None or heat_name == "None" or heat_name == "":
+            heat_name = heat.auto_name
         return heat_name
 
 
