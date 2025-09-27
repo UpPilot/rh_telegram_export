@@ -42,6 +42,9 @@ class Handler:
 
         channel_id = UIField(name = "telegram-filed-channel-id", label = "Telegram channel @uesrname or id", field_type = UIFieldType.TEXT, desc = "Username @ or channel ID to which the bot (must be an admin) will send data")  
         fields.register_option(channel_id, TELEGRAM_EXPORT_PLUGIN)
+
+        thread_id = UIField(name = "telegram-filed-thread-id", label = "Telegram channel's thread id", field_type = UIFieldType.TEXT, desc = "Thread or topic ID to which the bot (must be an admin) will send data")  
+        fields.register_option(thread_id, TELEGRAM_EXPORT_PLUGIN)
         
         results_text = UIField(name = "telegram-filed-results-text", label = "Results message text:", field_type = UIFieldType.TEXT, desc = "Select what text to send using {lp_best} , {lp_avg} , {lps_num} , {lps_consecutives} , {lps_total_time}"\
                                ,value = "{lp_best} | laps: {lps_num} | {lps_total_time}",placeholder = "{lp_best} | laps: {lps_num} | {lps_total_time}")  
@@ -87,6 +90,7 @@ class Handler:
     def send(self,text):
         token = self.rhapi.db.option("telegram-filed-token")
         channel_id = self.rhapi.db.option("telegram-filed-channel-id")
+        thread_id = self.rhapi.db.option("telegram-filed-thread-id")
 
 
         if not token or not channel_id: #Токен и какнал обязательны 
@@ -99,7 +103,8 @@ class Handler:
             "text": text,
             "parse_mode": "HTML" 
         }
-        
+        if thread_id:
+            payload["message_thread_id"] = thread_id
         
         try:
             response = requests.post(url, json=payload)
