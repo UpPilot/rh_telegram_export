@@ -252,8 +252,8 @@ class Handler:
     
     def get_pilot_freqs(self): # Возвращаем словарь {"heat_name1" :{"pilot_name":"R2"},"heat_name2" :{"pilot_name2":"R3"}}
         pilot_bc = {}
-        heats_list = self.rhapi.db.heats  
-        freqs = json.loads(self.rhapi.db.frequencysets[0].frequencies)
+        heats_list = self.rhapi.db.heats
+        freqs = json.loads(self.rhapi.race.frequencyset.frequencies)
 
         for heat in heats_list: #Проходимся по всемхитам 
             pilot_bc[heat] = {}
