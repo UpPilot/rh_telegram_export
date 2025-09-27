@@ -17,7 +17,7 @@ This plugin allows you to send the results of the races and laps to Telegram rig
 ### 1. Install plugin
 Download the plugin as an archive, unzip it and move the rh_telegram_export folder to \src\server\plugins\ 
 
-Enter ```pip install requests``` command in the RH virtual environment to install the required packages
+Enter ```pip install -r requirements.txt``` command in the RH virtual environment to install the required packages
 
 ### 2. Creating a bot
 To use the plugin you need to create a bot in telegram and get a telegram API token.
@@ -36,6 +36,8 @@ Insert the token received from botfather into the  "Telegram api token" field.
 If you want to send data to a channel, then paste @cannel_name into the input field.
 
 If you want to send data to a group, then copy its telegram id and add -100 before this number (example: -1001234567890)
+
+To send data to a specific topic, use the corresponding field.
 
 Now you can customize what information you want to send.
 
