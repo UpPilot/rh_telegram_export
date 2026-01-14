@@ -1,12 +1,16 @@
 import requests
 import json
+import time
 from RHUI import UIField, UIFieldType, UIFieldSelectOption
 from collections import defaultdict
+
+DEFAULT_BATTERY_THRESHOLD = 12.0
 
 class Handler:
     def __init__(self,rhapi):
         self.rhapi = rhapi
-        self.results_type = "by_fastest_lap"  
+        self.results_type = "by_fastest_lap"
+        self.last_battery_check_time = 0  # For periodic check interval
         self.message_templates = {
             "results":{
                 "msg_start": "<b>{heat_name}</b> | Round: {round_number}\n",
@@ -24,6 +28,14 @@ class Handler:
             },
             "lap_recorded":{
                 "msg_start":"{pilot_name} | 🏁 Lap {lap_number} | ⏱️ {lap_time_formatted}",
+                "msg_end":""
+            },
+            "battery_alert":{
+                "msg_start":"⚠️ <b>LOW BATTERY WARNING</b> ⚠️\nVoltage: {voltage}V (threshold: {threshold}V)",
+                "msg_end":""
+            },
+            "battery_status":{
+                "msg_start":"🔋 Battery: {voltage}V",
                 "msg_end":""
             }
 
@@ -66,6 +78,20 @@ class Handler:
                                      field_type = UIFieldType.CHECKBOX, desc = "Send notifications about the start and finish of the race")
         fields.register_option(start_finish_send,TELEGRAM_EXPORT_PLUGIN)
 
+        # Battery monitoring settings
+        battery_alert_enable = UIField(name='telegram-check-battery-alert', label='Enable battery voltage alert',
+                                       field_type=UIFieldType.CHECKBOX, desc="Send alert when battery voltage drops below threshold")
+        fields.register_option(battery_alert_enable, TELEGRAM_EXPORT_PLUGIN)
+
+        battery_threshold = UIField(name='telegram-field-battery-threshold', label='Battery voltage threshold (V)',
+                                    field_type=UIFieldType.TEXT, desc=f"Minimum battery voltage before sending alert (default: {DEFAULT_BATTERY_THRESHOLD}V)",
+                                    value=str(DEFAULT_BATTERY_THRESHOLD), placeholder=str(DEFAULT_BATTERY_THRESHOLD))
+        fields.register_option(battery_threshold, TELEGRAM_EXPORT_PLUGIN)
+
+        battery_check_interval = UIField(name='telegram-field-battery-interval', label='Battery check interval (sec)',
+                                         field_type=UIFieldType.TEXT, desc="How often to check battery voltage (in seconds)",
+                                         value="30", placeholder="30")
+        fields.register_option(battery_check_interval, TELEGRAM_EXPORT_PLUGIN)
 
         value_by_fastest = UIFieldSelectOption(value = "by_fastest_lap", label = "Fastest lap")
         value_by_race_time = UIFieldSelectOption(value = "by_race_time", label = "Race time")
@@ -79,11 +105,12 @@ class Handler:
 
         
         # Кнопочки
-        #ui.register_quickbutton(TELEGRAM_EXPORT_PLUGIN, "telegram-btn-heat", "Send current heat", self.race_heat)   
-        ui.register_quickbutton(TELEGRAM_EXPORT_PLUGIN, "telegram-btn-all-heats", "Send all heats", self.all_heats)              
+        #ui.register_quickbutton(TELEGRAM_EXPORT_PLUGIN, "telegram-btn-heat", "Send current heat", self.race_heat)
+        ui.register_quickbutton(TELEGRAM_EXPORT_PLUGIN, "telegram-btn-all-heats", "Send all heats", self.all_heats)
         ui.register_quickbutton(TELEGRAM_EXPORT_PLUGIN, "telegram-btn-results", "Send results", self.race_results)
         ui.register_quickbutton(TELEGRAM_EXPORT_PLUGIN, "telegram-btn-pilots", "Send all pilots", self.all_pilots)
         ui.register_quickbutton(TELEGRAM_EXPORT_PLUGIN, "telegram-btn-event-results", "Send event results", self.event_results)
+        ui.register_quickbutton(TELEGRAM_EXPORT_PLUGIN, "telegram-btn-send-battery", "Send battery status", self.send_battery_status)
        
 
     #Отправляем 
@@ -287,7 +314,7 @@ class Handler:
 
 
     def event_results(self,args=None):
-        results = self.rhapi.eventresults.results["event_leaderboard"][self.rhapi.db.option("telegram-select-results-type")]        
+        results = self.rhapi.eventresults.results["event_leaderboard"][self.rhapi.db.option("telegram-select-results-type")]
         race_data = results
         text = f""
         cnt = 1
@@ -305,3 +332,80 @@ class Handler:
             text += self.rhapi.db.option("telegram-filed-results-text").format_map(defaultdict(str,data)) + "\n\n"
         self.send(text=text)
         return
+
+    def get_battery_voltage(self):
+        """Get current battery voltage from sensors. Returns None if not available."""
+        try:
+            # Search through all available sensors for one with voltage() method
+            for sensor in self.rhapi.sensors.sensor_objs:
+                if hasattr(sensor, 'voltage') and callable(sensor.voltage):
+                    try:
+                        val = sensor.voltage()
+                        if val is not None:
+                            return float(val)
+                    except:
+                        continue
+            return None
+        except Exception:
+            return None
+
+    def check_battery(self, args=None):
+        """Check battery voltage and send alert if below threshold."""
+        if self.rhapi.db.option("telegram-check-battery-alert") != "1":
+            return
+
+        voltage = self.get_battery_voltage()
+        if voltage is None:
+            return
+
+        try:
+            threshold = float(self.rhapi.db.option("telegram-field-battery-threshold") or DEFAULT_BATTERY_THRESHOLD)
+        except ValueError:
+            threshold = DEFAULT_BATTERY_THRESHOLD
+
+        if voltage < threshold:
+            data = {
+                "voltage": f"{voltage:.2f}",
+                "threshold": f"{threshold:.1f}"
+            }
+            msg_tmp = self.message_templates["battery_alert"]
+            text = msg_tmp["msg_start"].format_map(defaultdict(str, data)) + msg_tmp["msg_end"]
+            self.send(text=text)
+
+    def battery_heartbeat(self, args=None):
+        """Called on each heartbeat - checks battery if interval has passed."""
+        try:
+            interval = float(self.rhapi.db.option("telegram-field-battery-interval") or "30")
+        except ValueError:
+            interval = 30
+
+        current_time = time.time()
+        if current_time - self.last_battery_check_time >= interval:
+            self.last_battery_check_time = current_time
+            self.check_battery()
+
+    def send_battery_status(self, args=None):
+        """Send current battery status to Telegram."""
+        voltage = self.get_battery_voltage()
+        if voltage is None:
+            self.rhapi.ui.message_notify("No voltage sensor available")
+            return
+
+        try:
+            threshold = float(self.rhapi.db.option("telegram-field-battery-threshold") or DEFAULT_BATTERY_THRESHOLD)
+        except ValueError:
+            threshold = DEFAULT_BATTERY_THRESHOLD
+
+        data = {
+            "voltage": f"{voltage:.2f}",
+            "threshold": f"{threshold:.1f}"
+        }
+
+        if voltage < threshold:
+            msg_tmp = self.message_templates["battery_alert"]
+        else:
+            msg_tmp = self.message_templates["battery_status"]
+
+        text = msg_tmp["msg_start"].format_map(defaultdict(str, data)) + msg_tmp["msg_end"]
+        self.send(text=text)
+        self.rhapi.ui.message_notify(f"Battery status sent: {voltage:.2f}V")

@@ -1,71 +1,83 @@
+## RH Telegram Export Plugin
 
-## RH Telegram export plugin
-This plugin allows you to send the results of the races and laps to Telegram right during the race.
-## Features 
-+ Sending notifications about the start and finish of races
-+ Sending of lap time during the race
-+ Sending race results
-+ Sending a list of all pilots on the event
-+ Sending all event heats
-+ Sending a list of pilots in the current heat
+This plugin allows you to send race data to Telegram during events.
 
-# rh_telegram_export
-# You need to install the requests library to use it.
+### Features
 
++ Notifications about race start and finish
++ Lap time sending during race
++ Race results with customizable format
++ Pilot list (all or only with assigned channels)
++ Heat list
++ Event results
++ Battery voltage monitoring and alerts
 
-## Usage
-### 1. Install plugin
-Download the plugin as an archive, unzip it and move the rh_telegram_export folder to \src\server\plugins\ 
+### Installation
 
-Enter ```pip install -r requirements.txt``` command in the RH virtual environment to install the required packages
+1. Download the plugin archive, unzip it and move the `rh_telegram_export` folder to `\src\server\plugins\`
 
-### 2. Creating a bot
-To use the plugin you need to create a bot in telegram and get a telegram API token.
+2. Run the following command in RH virtual environment:
+   ```
+   pip install -r requirements.txt
+   ```
 
-To do this, write @BotFather /newbot and follow the bot's instructions, at the end you will receive a token
-Example token: 123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
+3. Restart RotorHazard
 
-<b style = "color:red"> !!! WARNING !!! When you shut down and want to export the database, make sure to clear the token field before doing so. </b>
-### 3. Interface
+### Creating a Bot
+
+1. Write to @BotFather in Telegram: `/newbot`
+2. Follow the instructions to create a bot
+3. Copy the API token (example: `123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11`)
+4. Add the bot to your channel/group as administrator
+
+> **WARNING:** Before exporting the database, make sure to clear the token field!
+
+### Configuration
+
+Go to the "Run" tab and find the "Telegram export" section.
+
+#### Connection Settings
+
+| Field | Description |
+|-------|-------------|
+| **Telegram API token** | Bot token from @BotFather |
+| **Channel @username or id** | Channel: `@channel_name`, Group: `-100xxxxxxxxxx` |
+| **Thread id** | Topic ID for channels with topics (optional) |
+
+#### Auto-send Options (Checkboxes)
+
+| Option | Description |
+|--------|-------------|
+| **Auto send lap time** | Send lap times during the race |
+| **Auto send race results** | Send results after saving laps |
+| **Send pilots with assigned channels** | Filter pilots list to show only those with band/channel |
+| **Send the race start and finish** | Send notifications on race start/finish |
+
+#### Battery Monitoring
+
+| Option | Description |
+|--------|-------------|
+| **Enable battery voltage alert** | Enable periodic battery monitoring |
+| **Battery voltage threshold (V)** | Minimum voltage before alert (default: 12V) |
+| **Battery check interval (sec)** | How often to check voltage (default: 30 sec) |
+
+#### Results Settings
+
+| Option | Description |
+|--------|-------------|
+| **Results message text** | Template for results. Available placeholders: `{lp_best}`, `{lp_avg}`, `{lps_num}`, `{lps_consecutives}`, `{lps_total_time}` |
+| **Sort results by** | Fastest lap / Race time / Consecutives |
+
+### Buttons
+
+| Button | Description |
+|--------|-------------|
+| **Send all heats** | Send list of all heats with pilots |
+| **Send results** | Send last race results |
+| **Send all pilots** | Send pilot list |
+| **Send event results** | Send overall event results |
+| **Send battery status** | Send current battery voltage to Telegram |
+
+### Interface
+
 ![interface](imgs/interface.png)
-
-Go to the "Run" tab and find the "Telegram export" section there.
-
-Insert the token received from botfather into the  "Telegram api token" field.
-
-If you want to send data to a channel, then paste @cannel_name into the input field.
-
-If you want to send data to a group, then copy its telegram id and add -100 before this number (example: -1001234567890)
-
-To send data to a specific topic, use the corresponding field.
-
-Now you can customize what information you want to send.
-
-#### Settings
-+ **Lap time.**
-
-    If you want to receive data about each completed lap during race, check the box.
-
-
-+ **Race results**
-
-    This checkbox indicates that you should send the results of the flight immediately after you save the laps after the flight.
-
-
-+ **Pilots list**
-
-    You can send a list of all pilots or only those with a band and channel (by clicking the checkbox)
-
-+ **Event results**
-
-    It's the same as the race results, but it captures all the pilots and all their laps.
-
-+ **Start and finish notification**
-
-    Select  in the checkbox whether to send a message about the start and finish of the race.
-    It contains the name of the group and the round.
-
-
-Use additional checkboxes to configure
-
----
